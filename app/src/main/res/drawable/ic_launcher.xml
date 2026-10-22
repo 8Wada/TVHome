@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- fondo -->
+    <path
+        android:fillColor="#FF17151C"
+        android:pathData="M20,10h68a10,10 0 0 1 10,10v68a10,10 0 0 1 -10,10h-68a10,10 0 0 1 -10,-10v-68a10,10 0 0 1 10,-10z" />
+    <!-- cuatro círculos, como la fila de apps -->
+    <path
+        android:fillColor="#FFD0BCFF"
+        android:pathData="M39,39m-13,0a13,13 0 1 1 26,0a13,13 0 1 1 -26,0" />
+    <path
+        android:fillColor="#FF2BE38B"
+        android:pathData="M69,39m-13,0a13,13 0 1 1 26,0a13,13 0 1 1 -26,0" />
+    <path
+        android:fillColor="#FFFF9A1F"
+        android:pathData="M39,69m-13,0a13,13 0 1 1 26,0a13,13 0 1 1 -26,0" />
+    <path
+        android:fillColor="#FF7CC4FF"
+        android:pathData="M69,69m-13,0a13,13 0 1 1 26,0a13,13 0 1 1 -26,0" />
+</vector>

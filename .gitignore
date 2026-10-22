@@ -1,0 +1,23 @@
+# Gradle / Android Studio
+.gradle/
+build/
+app/build/
+.idea/
+.kotlin/
+*.iml
+captures/
+local.properties
+
+# APK / AAB generados
+*.apk
+*.aab
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Respaldo antiguo del código (no es parte del proyecto)
+HomeActivity.java.v1.txt
+
+# Logotipos propios de tus entradas HDMI (pueden ser marcas de terceros: no los publiques)
+app/src/main/res/drawable/logo_*.png
