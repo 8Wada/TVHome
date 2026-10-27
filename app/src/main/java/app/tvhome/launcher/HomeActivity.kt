@@ -43,6 +43,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -88,12 +93,14 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.compositeOver
@@ -895,24 +902,43 @@ private fun loadWallpaper(ctx: Context, i: Int): ImageBitmap? = runCatching {
 // ---------------------------------------------------------------------------------------------
 
 private val Scheme = darkColorScheme(
-    primary = Color(0xFFD0BCFF),
-    onPrimary = Color(0xFF381E72),
-    primaryContainer = Color(0xFF4F378B),
-    onPrimaryContainer = Color(0xFFEADDFF),
-    secondaryContainer = Color(0xFF4A4458),
-    onSecondaryContainer = Color(0xFFE8DEF8),
-    background = Color(0xFF0F0E12),
-    onBackground = Color(0xFFE6E0E9),
-    surface = Color(0xFF1D1B22),
-    onSurface = Color(0xFFE6E0E9),
-    surfaceVariant = Color(0xFF49454F),
-    onSurfaceVariant = Color(0xFFCAC4D0),
+    primary = Color(0xFFF2F2F7),
+    onPrimary = Color(0xFF1C1C1E),
+    primaryContainer = Color(0xFF3A3A3C),
+    onPrimaryContainer = Color(0xFFF2F2F7),
+    secondaryContainer = Color(0xFF2C2C2E),
+    onSecondaryContainer = Color(0xFFF2F2F7),
+    background = Color(0xFF0E0E10),
+    onBackground = Color(0xFFE9E9EE),
+    surface = Color(0xFF1C1C1E),
+    onSurface = Color(0xFFE9E9EE),
+    surfaceVariant = Color(0xFF48484A),
+    onSurfaceVariant = Color(0xFFC7C7CC),
 )
 
 @Composable
 private fun HomeTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = Scheme, content = content)
 }
+
+// Liquid Glass: solo en la capa de controles (barra superior y tarjetas de sistema), nunca en el contenido.
+// Sin color propio: relleno translúcido, brillo en el canto superior y enfoque en blanco neutro.
+internal val GlassFill = Color(0x1AFFFFFF)
+internal val GlassFillFocus = Color(0x4DFFFFFF)
+internal val GlassInk = Color.White
+internal val GlassSheen = Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x00FFFFFF)))
+
+internal fun glassBorder(shape: Shape, focused: Boolean = false): Border = Border(
+    BorderStroke(
+        if (focused) 1.5.dp else 1.dp,
+        Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = if (focused) 0.95f else 0.55f), Color.White.copy(alpha = 0.08f)),
+        ),
+    ),
+    shape = shape,
+)
+
+internal fun glassGlow(): Glow = Glow(elevationColor = Color.White.copy(alpha = 0.35f), elevation = 12.dp)
 
 internal val EDGE = 40.dp
 internal val R_NORMAL = 18.dp
@@ -952,29 +978,14 @@ private fun HomeScreen(
     onNativeHome: () -> Unit,
     onChannels: () -> Unit,
 ) {
-    val list = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val first = remember { FocusRequester() }
-
-    val keys = buildList {
-        add("hero")
-        if (d.services.isNotEmpty()) add("svc")
-        add("inp")
-        if (d.rec.isNotEmpty()) add("rec")
-        if (d.apps.isNotEmpty()) add("apps")
-        add("sys")
-    }
-    val firstKey = keys.first { it != "hero" }
-    val appsIdx = keys.indexOf("apps")
-    val onAppsTab by remember(appsIdx) {
-        derivedStateOf { appsIdx >= 0 && list.firstVisibleItemIndex >= appsIdx }
-    }
+    var section by remember { mutableStateOf("home") }
+    val menuFocus = remember { FocusRequester() }
 
     LaunchedEffect(d.loaded, tick) {
         if (d.loaded) {
-            list.scrollToItem(0)
+            section = "home"
             delay(80)
-            runCatching { first.requestFocus() }
+            runCatching { menuFocus.requestFocus() }
         }
     }
 
@@ -985,99 +996,82 @@ private fun HomeScreen(
     ) {
         Wallpaper()
 
-        Column(Modifier.fillMaxSize()) {
-            TopBar(
+        Row(Modifier.fillMaxSize()) {
+            SideMenu(
+                homeFocus = menuFocus,
                 account = account,
-                onApps = onAppsTab,
-                onHome = { scope.launch { list.animateScrollToItem(0) } },
-                onAppsTab = { if (appsIdx >= 0) scope.launch { list.animateScrollToItem(appsIdx) } },
+                section = section,
+                hasServices = d.services.isNotEmpty(),
+                hasInputs = d.inputs.isNotEmpty(),
+                hasRec = d.rec.isNotEmpty(),
+                hasApps = d.apps.isNotEmpty(),
+                onSection = { section = it },
                 onLiveTv = onLiveTv,
-                onProcs = onProcs,
                 onRest = onRest,
                 onNativeHome = onNativeHome,
                 onChannels = onChannels,
                 onSettings = onSettings,
             )
 
-            LazyColumn(
-                state = list,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 12.dp),
-            ) {
-                items(keys, key = { it }) { key ->
-                    when (key) {
-                        "hero" -> Hero()
-                        "svc" -> Section("Streaming") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = EDGE, vertical = ROW_PAD),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            ) {
-                                itemsIndexed(d.services, key = { _, a -> a.pkg }) { idx, a ->
-                                    AppBanner(
-                                        a, 176.dp, 99.dp,
-                                        if (firstKey == "svc" && idx == 0) Modifier.focusRequester(first) else Modifier,
-                                        onClick = { onApp(a) },
-                                        onLong = { onInfo(a) },
-                                    )
-                                }
-                            }
-                        }
-                        "inp" -> Section("Entradas") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = EDGE, vertical = ROW_PAD),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            ) {
-                                itemsIndexed(d.inputs, key = { _, i -> i.id }) { idx, i ->
-                                    InputTile(
-                                        i,
-                                        if (firstKey == "inp" && idx == 0) Modifier.focusRequester(first) else Modifier,
-                                        onClick = { onInput(i) },
-                                        onLong = { onInputLong(i) },
-                                    )
-                                }
-                            }
-                        }
-                        "rec" -> Section("Recomendadas") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = EDGE, vertical = ROW_PAD),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                itemsIndexed(d.rec, key = { _, a -> a.pkg }) { _, a ->
-                                    AppBanner(a, 152.dp, 86.dp, Modifier, onClick = { onApp(a) }, onLong = { onInfo(a) })
-                                }
-                            }
-                        }
-                        "apps" -> Section("Apps") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = EDGE, vertical = ROW_PAD),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                itemsIndexed(d.apps, key = { _, a -> a.pkg }) { _, a ->
-                                    AppBanner(a, 152.dp, 86.dp, Modifier, onClick = { onApp(a) }, onLong = { onInfo(a) })
-                                }
-                            }
-                        }
-                        "sys" -> Section("Sistema") {
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = EDGE, vertical = ROW_PAD),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                item { SysCard("Procesos", "procs", Color(0xFF7CC4FF)) { onProcs() } }
-                                val sys = listOf(
-                                    Triple("Almacenamiento", "storage", Color(0xFFFFB84D)) to Settings.ACTION_INTERNAL_STORAGE_SETTINGS,
-                                    Triple("Aplicaciones", "apps", Color(0xFF2BE38B)) to Settings.ACTION_APPLICATION_SETTINGS,
-                                    Triple("Pantalla", "display", Color(0xFFFF6FB5)) to Settings.ACTION_DISPLAY_SETTINGS,
-                                    Triple("Bluetooth", "bluetooth", Color(0xFF6C8BFF)) to Settings.ACTION_BLUETOOTH_SETTINGS,
-                                )
-                                itemsIndexed(sys) { _, (t, action) ->
-                                    SysCard(t.first, t.second, t.third) { onSettings(action, null) }
-                                }
-                            }
+            // el contenido ocupa todo lo que queda a la derecha del menú; el reloj se centra ahí
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                when (section) {
+                    "svc" -> SectionGrid("Streaming", 190.dp) {
+                        gridItems(d.services, key = { it.pkg }) { a ->
+                            AppBanner(a, 176.dp, 99.dp, Modifier, onClick = { onApp(a) }, onLong = { onInfo(a) })
                         }
                     }
+                    "inp" -> SectionGrid("Entradas", 200.dp) {
+                        gridItems(d.inputs, key = { it.id }) { i ->
+                            InputTile(i, Modifier, onClick = { onInput(i) }, onLong = { onInputLong(i) })
+                        }
+                    }
+                    "rec" -> SectionGrid("Recomendadas", 166.dp) {
+                        gridItems(d.rec, key = { it.pkg }) { a ->
+                            AppBanner(a, 152.dp, 86.dp, Modifier, onClick = { onApp(a) }, onLong = { onInfo(a) })
+                        }
+                    }
+                    "apps" -> SectionGrid("Apps", 166.dp) {
+                        gridItems(d.apps, key = { it.pkg }) { a ->
+                            AppBanner(a, 152.dp, 86.dp, Modifier, onClick = { onApp(a) }, onLong = { onInfo(a) })
+                        }
+                    }
+                    "sys" -> SectionGrid("Sistema", 190.dp) {
+                        item { SysCard("Procesos", "procs", Color(0xFF7CC4FF)) { onProcs() } }
+                        val sys = listOf(
+                            Triple("Almacenamiento", "storage", Color(0xFFFFB84D)) to Settings.ACTION_INTERNAL_STORAGE_SETTINGS,
+                            Triple("Aplicaciones", "apps", Color(0xFF2BE38B)) to Settings.ACTION_APPLICATION_SETTINGS,
+                            Triple("Pantalla", "display", Color(0xFFFF6FB5)) to Settings.ACTION_DISPLAY_SETTINGS,
+                            Triple("Bluetooth", "bluetooth", Color(0xFF6C8BFF)) to Settings.ACTION_BLUETOOTH_SETTINGS,
+                        )
+                        gridItems(sys) { (t, action) ->
+                            SysCard(t.first, t.second, t.third) { onSettings(action, null) }
+                        }
+                    }
+                    else -> Hero(Modifier.fillMaxSize())
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SectionGrid(title: String, minCell: Dp, content: LazyGridScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().padding(top = 28.dp)) {
+        Text(
+            title,
+            fontFamily = Poppins, fontSize = 18.sp, fontWeight = FontWeight.Medium,
+            color = Color(0xFFE9E9EE),
+            modifier = Modifier.padding(start = EDGE),
+        )
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minCell),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = EDGE, vertical = ROW_PAD + 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            content = content,
+        )
     }
 }
 
@@ -1115,7 +1109,7 @@ internal fun Wallpaper() {
 }
 
 @Composable
-private fun Hero() {
+private fun Hero(modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val now = rememberNow()
     val is24 = DateFormat.is24HourFormat(ctx)
@@ -1131,88 +1125,139 @@ private fun Hero() {
     val date = clockFmt("EEEE d 'de' MMMM").format(Date(now))
         .replaceFirstChar { it.uppercase() }
 
-    Column(Modifier.padding(start = EDGE, top = 0.dp, bottom = 0.dp)) {
+    Column(
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
         Text(
             greeting,
-            fontFamily = Poppins, fontSize = 16.sp, fontWeight = FontWeight.Medium,
-            color = Color(0xFFE6E0E9),
+            fontFamily = Poppins, fontSize = 20.sp, fontWeight = FontWeight.Medium,
+            color = Color(0xFFE9E9EE),
         )
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 time,
-                fontFamily = Poppins, fontSize = 48.sp, fontWeight = FontWeight.Bold,
+                fontFamily = Poppins, fontSize = 120.sp, fontWeight = FontWeight.Bold,
                 color = Color.White,
             )
             Text(
                 ampm,
-                fontFamily = Poppins, fontSize = 20.sp, fontWeight = FontWeight.Medium,
-                color = Color(0xFFE6E0E9),
-                modifier = Modifier.padding(bottom = 9.dp),
+                fontFamily = Poppins, fontSize = 36.sp, fontWeight = FontWeight.Medium,
+                color = Color(0xFFE9E9EE),
+                modifier = Modifier.padding(bottom = 22.dp),
             )
         }
         Text(
             date,
-            fontFamily = Poppins, fontSize = 15.sp,
-            color = Color(0xFFCAC4D0),
+            fontFamily = Poppins, fontSize = 22.sp,
+            color = Color(0xFFC7C7CC),
         )
     }
 }
 
+internal val MENU_W = 236.dp
+
+/** Menú lateral de vidrio con todas las opciones; al enfocar una sección su contenido aparece a la derecha. */
 @Composable
-private fun TopBar(
+private fun SideMenu(
+    homeFocus: FocusRequester,
     account: String?,
-    onApps: Boolean,
-    onHome: () -> Unit,
-    onAppsTab: () -> Unit,
+    section: String,
+    hasServices: Boolean,
+    hasInputs: Boolean,
+    hasRec: Boolean,
+    hasApps: Boolean,
+    onSection: (String) -> Unit,
     onLiveTv: () -> Unit,
-    onProcs: () -> Unit,
     onRest: () -> Unit,
     onNativeHome: () -> Unit,
     onChannels: () -> Unit,
     onSettings: (String, Uri?) -> Unit,
 ) {
-    Row(
+    val shape = RoundedCornerShape(28.dp)
+    val st = rememberWifi()
+    Column(
         Modifier
-            .fillMaxWidth()
-            .padding(horizontal = EDGE, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
+            .width(MENU_W - 16.dp)
+            .fillMaxHeight()
+            .clip(shape)
+            .background(GlassFill)
+            .background(GlassSheen)
+            .border(glassBorder(shape).border, shape)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
     ) {
-        // avatar de la cuenta
-        Box(
-            Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF6DBB4D)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                if (account != null) account.first().uppercaseChar().toString() else "?",
-                color = Color(0xFF0B2A00),
-                fontWeight = FontWeight.Bold,
-                fontFamily = Poppins, fontSize = 16.sp,
-            )
-        }
-        Spacer(Modifier.width(14.dp))
-
-        // pestañas, la activa en píldora blanca
-        TabPill("Inicio", selected = !onApps, onClick = onHome)
-        Spacer(Modifier.width(4.dp))
-        TabPill("En vivo", selected = false, onClick = onLiveTv)
-        Spacer(Modifier.width(4.dp))
-        TabPill("Canales", selected = false, onClick = onChannels)
-        Spacer(Modifier.width(4.dp))
-        TabPill("Apps", selected = onApps, onClick = onAppsTab)
-        Spacer(Modifier.width(4.dp))
-        TabPill("Procesos", selected = false, onClick = onProcs)
+        MenuItem("home", Color.White, "Inicio", selected = section == "home",
+            modifier = Modifier.focusRequester(homeFocus), onFocus = { onSection("home") }) { onSection("home") }
+        MenuItem("tv", Color.White, "En vivo", onClick = onLiveTv)
+        MenuItem("display", Color.White, "Canales", onClick = onChannels)
+        if (hasServices) MenuItem("tv", Color.White, "Streaming", selected = section == "svc",
+            onFocus = { onSection("svc") }) { onSection("svc") }
+        if (hasInputs) MenuItem("display", Color.White, "Entradas", selected = section == "inp",
+            onFocus = { onSection("inp") }) { onSection("inp") }
+        if (hasRec) MenuItem("apps", Color.White, "Recomendadas", selected = section == "rec",
+            onFocus = { onSection("rec") }) { onSection("rec") }
+        if (hasApps) MenuItem("apps", Color.White, "Apps", selected = section == "apps",
+            onFocus = { onSection("apps") }) { onSection("apps") }
+        MenuItem("procs", Color.White, "Sistema", selected = section == "sys",
+            onFocus = { onSection("sys") }) { onSection("sys") }
 
         Spacer(Modifier.weight(1f))
-        IconPill("moon", Color(0xFFD0BCFF)) { onRest() }
-        Spacer(Modifier.width(8.dp))
-        WifiPill { onSettings(Settings.ACTION_WIFI_SETTINGS, null) }
-        Spacer(Modifier.width(8.dp))
-        IconPill("home", Color(0xFF7CC4FF)) { onNativeHome() }
-        Spacer(Modifier.width(8.dp))
-        IconPill("gear", Color(0xFFE6E0E9)) { onSettings(Settings.ACTION_SETTINGS, null) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            IconPill("moon", Color(0xFFFFD27A)) { onRest() }
+            IconPill("wifi", wifiColor(st.level), level = st.level) { onSettings(Settings.ACTION_WIFI_SETTINGS, null) }
+            IconPill("gear", Color(0xFFE9E9EE)) { onSettings(Settings.ACTION_SETTINGS, null) }
+        }
+    }
+}
+
+@Composable
+private fun MenuItem(
+    kind: String,
+    tint: Color,
+    label: String,
+    selected: Boolean = false,
+    modifier: Modifier = Modifier,
+    onFocus: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(50)
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .padding(vertical = 1.dp)
+            .onFocusChanged { if (it.hasFocus) onFocus?.invoke() },
+        shape = ClickableSurfaceDefaults.shape(shape = shape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) GlassFill else Color.Transparent,
+            contentColor = Color.White,
+            focusedContainerColor = GlassFillFocus,
+            focusedContentColor = GlassInk,
+            pressedContainerColor = GlassFillFocus,
+            pressedContentColor = GlassInk,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f),
+        border = ClickableSurfaceDefaults.border(
+            border = if (selected) glassBorder(shape) else Border.None,
+            focusedBorder = glassBorder(shape, focused = true),
+        ),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = glassGlow()),
+    ) {
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Glyph(kind, tint, Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(
+                label,
+                fontFamily = Poppins, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1348,22 +1393,21 @@ private fun SysCard(title: String, kind: String, neon: Color, onClick: () -> Uni
         modifier = Modifier.size(176.dp, 62.dp),
         shape = ClickableSurfaceDefaults.shape(shape = shape, focusedShape = focusShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0xCC1D1B22),
-            focusedContainerColor = Color(0xF21D1B22),
-            pressedContainerColor = Color(0xF21D1B22),
+            containerColor = GlassFill,
+            focusedContainerColor = GlassFillFocus,
+            pressedContainerColor = GlassFillFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
         border = ClickableSurfaceDefaults.border(
-            border = Border(BorderStroke(1.5.dp, neon.copy(alpha = 0.35f)), shape = shape),
-            focusedBorder = Border(BorderStroke(3.dp, neon), shape = focusShape),
+            border = glassBorder(shape),
+            focusedBorder = glassBorder(focusShape, focused = true),
         ),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = neon.copy(alpha = 0.9f), elevation = GLOW),
-        ),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = glassGlow()),
     ) {
         Row(
             Modifier
                 .fillMaxSize()
+                .background(GlassSheen)
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -1435,60 +1479,25 @@ private fun wifiColor(level: Int): Color = when {
 }
 
 @Composable
-private fun WifiPill(onClick: () -> Unit) {
-    val st = rememberWifi()
-    val cs = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.height(34.dp),
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(50)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0xB34A4458),
-            contentColor = cs.onSecondaryContainer,
-            focusedContainerColor = cs.primary,
-            focusedContentColor = cs.onPrimary,
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = cs.primary.copy(alpha = 0.8f), elevation = 14.dp),
-        ),
-    ) {
-        Row(
-            Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Glyph("wifi", wifiColor(st.level), Modifier.size(20.dp), level = st.level)
-            if (st.dbm != null) {
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    "${st.dbm}",
-                    fontFamily = Poppins, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-internal fun IconPill(kind: String, tint: Color, onClick: () -> Unit) {
+internal fun IconPill(kind: String, tint: Color, level: Int = 4, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
         modifier = Modifier.size(34.dp),
         shape = ClickableSurfaceDefaults.shape(shape = CircleShape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0xB34A4458),
-            focusedContainerColor = cs.primary,
+            containerColor = GlassFill,
+            focusedContainerColor = GlassFillFocus,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = cs.primary.copy(alpha = 0.8f), elevation = 14.dp),
+        border = ClickableSurfaceDefaults.border(
+            border = glassBorder(CircleShape),
+            focusedBorder = glassBorder(CircleShape, focused = true),
         ),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = glassGlow()),
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Glyph(kind, tint, Modifier.size(20.dp))
+        Box(Modifier.fillMaxSize().background(GlassSheen), contentAlignment = Alignment.Center) {
+            Glyph(kind, tint, Modifier.size(20.dp), level = level)
         }
     }
 }
@@ -1727,38 +1736,6 @@ private fun InputTile(i: InputItem, modifier: Modifier, onClick: () -> Unit, onL
 }
 
 @Composable
-private fun TabPill(text: String, selected: Boolean, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val dark = Color(0xFF1B1B1F)
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.height(34.dp),
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(50)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color.White else Color.Transparent,
-            contentColor = if (selected) dark else cs.onSurface,
-            focusedContainerColor = Color.White,
-            focusedContentColor = dark,
-            pressedContainerColor = Color.White,
-            pressedContentColor = dark,
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = Color.White.copy(alpha = 0.55f), elevation = 14.dp),
-        ),
-    ) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text, fontFamily = Poppins, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-        }
-    }
-}
-
-@Composable
 internal fun Pill(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Surface(
@@ -1766,19 +1743,22 @@ internal fun Pill(text: String, modifier: Modifier = Modifier, onClick: () -> Un
         modifier = modifier.height(34.dp),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0xB34A4458),
-            contentColor = cs.onSecondaryContainer,
-            focusedContainerColor = cs.primary,
-            focusedContentColor = cs.onPrimary,
+            containerColor = GlassFill,
+            contentColor = Color.White,
+            focusedContainerColor = GlassFillFocus,
+            focusedContentColor = GlassInk,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = cs.primary.copy(alpha = 0.8f), elevation = 16.dp),
+        border = ClickableSurfaceDefaults.border(
+            border = glassBorder(RoundedCornerShape(50)),
+            focusedBorder = glassBorder(RoundedCornerShape(50), focused = true),
         ),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = glassGlow()),
     ) {
         Box(
             Modifier
                 .fillMaxHeight()
+                .background(GlassSheen)
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center,
         ) {

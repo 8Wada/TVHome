@@ -714,21 +714,24 @@ private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier.height(32.dp),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color.White else Color(0xB34A4458),
-            contentColor = if (selected) dark else cs.onSurface,
-            focusedContainerColor = Color.White,
-            focusedContentColor = dark,
-            pressedContainerColor = Color.White,
-            pressedContentColor = dark,
+            containerColor = if (selected) GlassFillFocus else GlassFill,
+            contentColor = if (selected) GlassInk else Color.White,
+            focusedContainerColor = GlassFillFocus,
+            focusedContentColor = GlassInk,
+            pressedContainerColor = GlassFillFocus,
+            pressedContentColor = GlassInk,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
-        glow = ClickableSurfaceDefaults.glow(
-            focusedGlow = Glow(elevationColor = Color.White.copy(alpha = 0.55f), elevation = 12.dp),
+        border = ClickableSurfaceDefaults.border(
+            border = glassBorder(RoundedCornerShape(50)),
+            focusedBorder = glassBorder(RoundedCornerShape(50), focused = true),
         ),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = glassGlow()),
     ) {
         Box(
             Modifier
                 .fillMaxHeight()
+                .background(GlassSheen)
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center,
         ) {
